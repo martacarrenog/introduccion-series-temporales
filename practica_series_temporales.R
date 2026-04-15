@@ -12,6 +12,7 @@
 #    3. Guarda tu practica como: practica_ST_TuNombre.R
 ########################################################################
 
+
 # ─────────────────────────────────────────────────────────────────────
 # PASO 0: Instalar y cargar paquetes
 # (ejecuta install.packages solo la primera vez)
@@ -458,11 +459,29 @@ print(prediccion_arima)
 # EJERCICIO 7.4 — Comparar valores reales vs estimados del modelo
 # ─────────────────────────────────────────────────────────────────────
 
-dygraph(cbind(prediccion_arima$x, fitted(prediccion_arima)),
-        main = "Real vs Estimado — Hospital A") %>%
-  dySeries("V1", label = "Real",     color = "steelblue") %>%
-  dySeries("V2", label = "Estimado", color = "tomato") %>%
+dygraph(cbind(prediccion_arima$x, fitted(prediccion_arima))) %>%
+  dySeries("prediccion_arima$x", label = "Real", color = "steelblue") %>%
+  dySeries("fitted(prediccion_arima)", label = "Estimado", color = "tomato") %>%
   dyOptions(strokeWidth = 1.5)
+
+
+# dygraph(cbind(Real = prediccion_arima$x, Estimado = fitted(prediccion_arima)),
+#         main = "Real vs Estimado — Hospital A") %>%
+#   dySeries("Real",     label = "Real",     color = "steelblue") %>%
+#   dySeries("Estimado", label = "Estimado", color = "tomato") %>%
+#   dyOptions(strokeWidth = 1.5)
+
+
+
+# g <- dygraph(cbind(prediccion_arima$x, fitted(prediccion_arima))) %>%
+#   dySeries("prediccion_arima$x", label = "Real", color = "steelblue") %>%
+#   dySeries("fitted(prediccion_arima)", label = "Estimado", color = "tomato") %>%
+#   dyOptions(strokeWidth = 1.5)
+# htmlwidgets::saveWidget(g, "grafico.html", selfcontained = TRUE)
+# browseURL("grafico.html")
+
+
+
 
 # ---
 # PREGUNTA 7.4a:
@@ -471,84 +490,121 @@ dygraph(cbind(prediccion_arima$x, fitted(prediccion_arima)),
 # RESPUESTA:
 
 
+
+
 ########################################################################
 # BLOQUE 8: EJERCICIO INTEGRADOR — Cancer de mama (OPCIONAL, 15 min)
 ########################################################################
-# Aplica todo el flujo aprendido a una serie temporal nueva y diferente:
-# datos anuales de muertes por cancer de mama en paises europeos.
-########################################################################
 
 # ─────────────────────────────────────────────────────────────────────
-# EJERCICIO 8.1 — Preparar la serie de Espana
+# EJERCICIO 8.1 — Preparar la serie de España y Francia
 # ─────────────────────────────────────────────────────────────────────
 
 df_cancer <- read.csv("breast_cancer_number_of_female_deaths.csv",
-                      check.names = FALSE)
+                      check.names = FALSE,
+                      row.names    = 1)
 
-# El dataset esta en formato ancho (filas = paises, columnas = años)
-# Necesitamos transponerlo para tener una fila por año
-nombres   <- df_cancer$country
-df_cancer <- data.frame(t(df_cancer[-1]))
-colnames(df_cancer) <- nombres
+# España: valores numéricos normales
+ts_spain <- ts(as.numeric(df_cancer["Spain", ]),
+               start = 1990, frequency = 1)
 
-df_cancer$Spain  <- as.numeric(df_cancer$Spain)
-df_cancer$France <- as.numeric(df_cancer$France)
+# Francia: valores con "k" (ej: "12.5k") -> eliminar "k" y multiplicar x1000
+france_raw <- as.character(unlist(df_cancer["France", ]))
+france_num <- as.numeric(gsub("k", "", france_raw)) * 1000
+ts_france  <- ts(france_num, start = 1990, frequency = 1)
 
-# Crear series temporales anuales (frequency=1 para datos anuales)
-ts_spain  <- ts(df_cancer$Spain,  start = 1990, frequency = 1)
-ts_france <- ts(df_cancer$France, start = 1990, frequency = 1)
+# Verificar que no hay NAs — ambos deben devolver 0
+sum(is.na(ts_spain))
+sum(is.na(ts_france))
+
+# Vista previa
+head(ts_spain)
+head(ts_france)   # debe mostrar 12500, 12700, 12800...
+
 
 # ─────────────────────────────────────────────────────────────────────
-# TAREA 8.1 — Analisis completo para Espana (rellena los huecos)
-# Sigue el mismo flujo que en los bloques anteriores:
+# TAREA 8.1 — Análisis completo para España
 # ─────────────────────────────────────────────────────────────────────
 
-# 1. VISUALIZACION
+# 1. VISUALIZACIÓN
 autoplot(ts_spain) +
   ggtitle("Muertes anuales por cancer de mama — España") +
-  ylab("Numero de muertes") + xlab("Año") +
+  ylab("Numero de muertes") +
+  xlab("Año") +
   theme_minimal()
 
 # 2. TEST DE ESTACIONARIEDAD
 adf.test(ts_spain)
-# RESPUESTA: ¿Es estacionaria la serie de España?
+# RESPUESTA: p-valor = 0.8947 -> NO estacionaria (p > 0.05)
+# auto.arima usará d=1 o d=2
 
 # 3. AUTO ARIMA
-modelo_spain <- _______________
+modelo_spain <- auto.arima(ts_spain,
+                           stepwise      = FALSE,
+                           approximation = FALSE,
+                           trace         = TRUE)
+modelo_spain
+summary(modelo_spain)
+# RESPUESTA: Modelo: ARIMA( , , )   AIC:
 
-# 4. DIAGNOSTICO DE RESIDUOS
-checkresiduals(_______________)
+# 4. DIAGNÓSTICO DE RESIDUOS
+checkresiduals(modelo_spain)
+# RESPUESTA: p-valor Ljung-Box:    ¿Ruido blanco?: SI / NO
 
-# 5. PREDICCION para los proximos 5 años
-pred_spain <- forecast(_______________, h = 5)
+# 5. PREDICCIÓN para los próximos 5 años
+pred_spain <- forecast(modelo_spain, h = 5)
 autoplot(pred_spain) +
   ggtitle("Prediccion 5 años — Muertes cancer de mama España") +
+  ylab("Numero de muertes") +
+  xlab("Año") +
   theme_minimal()
+print(pred_spain)
+# RESPUESTA: Tendencia:    Intervalos amplios/estrechos:
 
-# 6. INTERPRETACION FINAL:
-# ¿Que modelo se selecciono? ¿Es estacionaria la serie?
-# ¿Que tendencia se observa en las predicciones?
-# ¿Que implicaciones sanitarias tiene esta tendencia?
+# 6. INTERPRETACIÓN FINAL
 # RESPUESTA:
+# Modelo seleccionado:
+# ¿Estacionaria?: NO (p=0.8947)
+# Tendencia observada:
+# Implicación sanitaria: el descenso desde ~2000 refleja mejoras
+# en diagnóstico precoz (mamografía) y tratamientos adyuvantes
+
 
 # ─────────────────────────────────────────────────────────────────────
-# TAREA 8.2 — Comparar España y Francia en el mismo grafico
+# TAREA 8.2 — Comparar España y Francia en el mismo gráfico
 # ─────────────────────────────────────────────────────────────────────
 
 ts_ambos <- cbind(ts_spain, ts_france)
-dygraph(ts_ambos, main = "Muertes por cancer de mama: España vs Francia") %>%
+
+# Verificar que las dos columnas tienen datos
+head(ts_ambos)
+sum(is.na(ts_ambos))   # debe ser 0
+
+# Gráfico comparativo interactivo
+dygraph(ts_ambos,
+        main = "Muertes por cancer de mama: España vs Francia") %>%
   dySeries("ts_spain",  label = "España",  color = "steelblue") %>%
-  dySeries("ts_france", label = "Francia", color = "tomato") %>%
+  dySeries("ts_france", label = "Francia", color = "tomato")   %>%
   dyOptions(strokeWidth = 2)
 
-# PREGUNTA 8.2a:
-# ¿Que pais tiene mayor numero de muertes absolutas?
-# ¿Tienen tendencias similares o divergentes?
-# ¿Como podrian influir las diferencias demograficas en esta comparacion?
-# RESPUESTA:
+# Totales acumulados
+total_spain  <- sum(coredata(ts_spain),  na.rm = TRUE)
+total_france <- sum(coredata(ts_france), na.rm = TRUE)
+total_spain
+total_france
+
+# RESPUESTA 8.2a:
+# ¿Qué país tiene mayor número de muertes absolutas?
+# Total España:       Total Francia:
+# ¿Tendencias similares o divergentes?:
+# ¿Cómo influyen las diferencias demográficas?:
+# Francia tiene ~2x la población de España, por eso más muertes
+# absolutas. La comparación correcta requiere tasas por 100.000
+# mujeres ajustadas por edad, no números absolutos.
 
 
 ########################################################################
-# FIN DE LA PRACTICA
+# FIN DE LA PRÁCTICA
 # Guarda tu script con tus respuestas: practica_ST_TuNombre.R
 ########################################################################
+
